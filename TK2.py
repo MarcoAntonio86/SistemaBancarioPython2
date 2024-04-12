@@ -87,7 +87,6 @@ class Banco:
             messagebox.showerror("Erro", "Efetue o login para realizar o depósito.")
             
     def extrato(self):
-
         query = "SELECT Saldo FROM usuarios WHERE cpf = %s"
         valores = (self.usuarios.get('cpf'),)
         
@@ -95,28 +94,36 @@ class Banco:
             self.cursor.execute(query, valores)
             saldo = self.cursor.fetchone()[0]
             extrato = f"Saldo atual: R$ {saldo:.2f}\n"
+            if saldo < 0:
+                extrato += f"Uso do Cheque Especial: R$ {-saldo:.2f}\n"
             extrato += self.extrato  # Adiciona o extrato anterior
             print("\n================= Extrato ==================")
             print(extrato)
             print("============================================")
         except mysql.connector.Error as err:
             print(f"Erro ao obter extrato: {err}")
-
     def sacar(self, valor):
         if self.usuario_logado:
             excedeu_limite = valor > self.limite
             excedeu_saques = self.numero_saques >= self.LIMITE_SAQUES
 
             # Verifica se o saque excede o limite ou o número máximo de saques
-            if excedeu_limite:
-                messagebox.showerror("Erro", f"Operação falhou! O valor do saque excedeu o limite. Seu limite é: {self.limite}")
-            elif excedeu_saques:
+            if excedeu_saques:
                 messagebox.showerror("Erro", f"Operação falhou! Número máximo de saques excedido. Seu limite de saque é: {self.LIMITE_SAQUES}")
             else:
-                # Atualiza o saldo e o extrato
-                self.saldo -= valor
-                self.extrato += f"Saque: R$ {valor:.2f}\n"
-                self.numero_saques += 1
+                saldo_disponivel = self.saldo + self.limite  # Saldo disponível incluindo o cheque especial
+                if valor > saldo_disponivel:
+                    self.saldo -= valor
+                    self.extrato += f"Saque (Cheque Especial): R$ {valor:.2f}\n"
+                    self.numero_saques += 1
+                elif valor <= self.saldo:
+                    self.saldo -= valor
+                    self.extrato += f"Saque: R$ {valor:.2f}\n"
+                    self.numero_saques += 1
+                else:
+                    self.saldo -= valor
+                    self.extrato += f"Saque (Cheque Especial): R$ {valor:.2f}\n"
+                    self.numero_saques += 1
 
                 query = "UPDATE usuarios SET Saldo = %s WHERE cpf = %s"
                 valores = (self.saldo, self.usuarios.get('cpf'))
@@ -127,7 +134,6 @@ class Banco:
                     print(f"Erro ao atualizar saldo do usuário: {err}")
         else:
             messagebox.showerror("Erro", "Efetue o login para realizar o saque.")
-
 
     def sair(self):
         messagebox.showinfo("Sair", "Saindo do sistema.")
