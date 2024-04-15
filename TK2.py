@@ -96,12 +96,17 @@ class Banco:
             extrato = f"Saldo atual: R$ {saldo:.2f}\n"
             if saldo < 0:
                 extrato += f"Uso do Cheque Especial: R$ {-saldo:.2f}\n"
+            
+            # Adiciona o extrato de transações
+            extrato += "Extrato de Transações:\n"
             extrato += self.extrato  # Adiciona o extrato anterior
+            
             print("\n================= Extrato ==================")
             print(extrato)
             print("============================================")
         except mysql.connector.Error as err:
             print(f"Erro ao obter extrato: {err}")
+
     def sacar(self, valor):
         if self.usuario_logado:
             excedeu_limite = valor > self.limite
@@ -110,6 +115,8 @@ class Banco:
             # Verifica se o saque excede o limite ou o número máximo de saques
             if excedeu_saques:
                 messagebox.showerror("Erro", f"Operação falhou! Número máximo de saques excedido. Seu limite de saque é: {self.LIMITE_SAQUES}")
+            elif excedeu_limite:
+                messagebox.showerror("Erro", f"Operação falhou! O valor do saque excede o limite permitido. Seu limite é: {self.limite}")
             else:
                 saldo_disponivel = self.saldo + self.limite  # Saldo disponível incluindo o cheque especial
                 if valor > saldo_disponivel:
@@ -135,6 +142,7 @@ class Banco:
         else:
             messagebox.showerror("Erro", "Efetue o login para realizar o saque.")
 
+
     def sair(self):
         messagebox.showinfo("Sair", "Saindo do sistema.")
         self.conexao.close()
@@ -142,7 +150,9 @@ class Banco:
     def transferir(self, destino, valor):
         if self.usuario_logado:
             if valor > 0:
-                if valor <= self.saldo and valor <= self.limite:
+                saldo_disponivel = self.saldo + self.limite  # Saldo disponível incluindo o cheque especial
+
+                if valor <= saldo_disponivel:
                     # Subtrai o valor transferido do saldo do remetente
                     self.saldo -= valor
                     self.extrato += f"Transferência: R$ {valor:.2f} para CPF: {destino}\n"
@@ -161,7 +171,24 @@ class Banco:
                     
                     messagebox.showinfo("Transferência", f"Transferência de R$ {valor:.2f} realizada com sucesso para o CPF: {destino}.")
                 else:
-                    messagebox.showerror("Erro", "A transferência não pode ser concluída. Verifique seu saldo e limite.")
+                    # Calcula o valor utilizando o cheque especial
+                    valor_cheque_especial = valor - self.saldo
+                    self.saldo = 0
+                    self.extrato += f"Transferência (Cheque Especial): R$ {valor_cheque_especial:.2f} para CPF: {destino}\n"
+                    
+                    # Atualiza o saldo do remetente para 0
+                    query_remetente = "UPDATE usuarios SET Saldo = 0 WHERE cpf = %s"
+                    valores_remetente = (self.usuarios.get('cpf'),)
+                    self.cursor.execute(query_remetente, valores_remetente)
+                    
+                    # Adiciona o valor transferido ao saldo do destinatário
+                    query_destinatario = "UPDATE usuarios SET Saldo = Saldo + %s WHERE cpf = %s"
+                    valores_destinatario = (valor, destino)
+                    self.cursor.execute(query_destinatario, valores_destinatario)
+                    
+                    self.conexao.commit()
+                    
+                    messagebox.showinfo("Transferência", f"Transferência de R$ {valor_cheque_especial:.2f} realizada com sucesso para o CPF: {destino} utilizando o Cheque Especial.")
             else:
                 messagebox.showerror("Erro", "Valor inválido para transferência.")
         else:
