@@ -166,52 +166,34 @@ class Banco:
     def transferir(self, destino, valor):
         if self.usuario_logado:
             if valor > 0:
-                excedeu_saques = self.numero_saques >= self.LIMITE_SAQUES
+                saldo_disponivel = self.saldo + self.chespecial  # Saldo disponível incluindo o cheque especial
 
-                # Verifica se o número máximo de saques foi excedido
-                if excedeu_saques:
-                    messagebox.showerror("Erro", f"Operação falhou! Número máximo de saques excedido. Seu limite de saque é: {self.LIMITE_SAQUES}")
-                else:
-                    saldo_disponivel = self.saldo + self.chespecial  # Saldo disponível incluindo o cheque especial
-
-                    # Verifica se o valor da transferência excede o saldo disponível
-                    if valor > saldo_disponivel:
-                        messagebox.showerror("Erro", f"Operação falhou! O valor da transferência excede o saldo disponível.")
+                if valor <= saldo_disponivel:
+                    if valor <= self.saldo:
+                        self.saldo -= valor
                     else:
-                        # Verifica se o saldo é suficiente para realizar a transferência
-                        if valor <= self.saldo:
-                            self.saldo -= valor
-                        else:
-                            # Se o saldo não for suficiente, utiliza o cheque especial
-                            valor_restante = valor - self.saldo
-                            self.saldo = 0
+                        valor_cheque_especial = valor - self.saldo
+                        self.saldo = 0
+                        self.chespecial -= valor_cheque_especial
 
-                            # Verifica se o valor restante excede o limite do cheque especial
-                            if valor_restante <= self.chespecial:
-                                self.chespecial -= valor_restante
-                            else:
-                                # Se exceder o limite do cheque especial, ajusta o valor da transferência
-                                valor_restante = self.chespecial
-                                self.chespecial = 0
+                    query_remetente = "UPDATE usuarios SET Saldo = %s, ChequeEspecial = %s WHERE cpf = %s"
+                    valores_remetente = (self.saldo, self.chespecial, self.usuarios.get('cpf'))
+                    self.cursor.execute(query_remetente, valores_remetente)
 
-                        # Atualiza o saldo do remetente e o saldo do destinatário no banco de dados
-                        query_remetente = "UPDATE usuarios SET Saldo = %s, ChequeEspecial = %s WHERE cpf = %s"
-                        valores_remetente = (self.saldo, self.chespecial, self.usuarios.get('cpf'))
-                        self.cursor.execute(query_remetente, valores_remetente)
+                    query_destinatario = "UPDATE usuarios SET Saldo = Saldo + %s WHERE cpf = %s"
+                    valores_destinatario = (valor, destino)
+                    self.cursor.execute(query_destinatario, valores_destinatario)
 
-                        query_destinatario = "UPDATE usuarios SET Saldo = Saldo + %s WHERE cpf = %s"
-                        valores_destinatario = (valor, destino)
-                        self.cursor.execute(query_destinatario, valores_destinatario)
+                    self.conexao.commit()
 
-                        self.conexao.commit()
-
-                        # Incrementa o número de saques realizados
-                        self.numero_saques += 1
-                        messagebox.showinfo("Transferência", f"Transferência de R$ {valor:.2f} realizada com sucesso para o CPF: {destino}.")
+                    messagebox.showinfo("Transferência", f"Transferência de R$ {valor:.2f} realizada com sucesso para o CPF: {destino}.")
+                else:
+                    messagebox.showerror("Erro", "Saldo e Cheque Especial insuficientes para realizar a transferência.")
             else:
                 messagebox.showerror("Erro", "Valor inválido para transferência.")
         else:
             messagebox.showerror("Erro", "Faça login primeiro para realizar uma transferência.")
+
 
 
 
