@@ -15,7 +15,7 @@ class Banco:
         self.usuarios = {}
         self.saldo = 0
         self.limite = 500
-        self.chespecial = 1000 # limite cheque especial
+        self.chespecial = 0 # limite cheque especial
         self.extrato = ""
         self.numero_saques = 0
         self.LIMITE_SAQUES = 3
@@ -61,7 +61,7 @@ class Banco:
     def cadastrar_usuario(self, nome, cpf, senha, saldo):
         try:
             query = "INSERT INTO usuarios (nome, cpf, senha, Saldo, ChequeEspecial ) VALUES (%s, %s, %s, %s, %s)"
-            valores = (nome, cpf, senha, saldo, self.chespecial)
+            valores = (nome, cpf, senha, saldo, saldo*4)
             self.cursor.execute(query, valores)
             self.conexao.commit()
             messagebox.showinfo("Cadastro", "Usuário cadastrado com sucesso!")
