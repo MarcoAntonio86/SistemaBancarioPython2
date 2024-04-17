@@ -14,8 +14,8 @@ class Banco:
 
         self.usuarios = {}
         self.saldo = 0
-        self.limite = 500
-        self.chespecial = 0 # limite cheque especial
+        self.limite = ""
+        self.chespecial = 0  # limite cheque especial
         self.extrato = ""
         self.numero_saques = 0
         self.LIMITE_SAQUES = 3
@@ -31,7 +31,7 @@ class Banco:
                 cpf VARCHAR(11) UNIQUE NOT NULL,
                 senha VARCHAR(50) NOT NULL,
                 Saldo DOUBLE,
-                ChequeEspecial DOUBLE               
+                ChequeEspecial DOUBLE
             )
             """)
             print("Tabela 'usuarios' criada com sucesso!")
@@ -43,25 +43,26 @@ class Banco:
     def login(self, cpf, senha):
         query = "SELECT * FROM usuarios WHERE cpf = %s AND senha = %s"
         valores = (cpf, senha)
-
+    
         self.cursor.execute(query, valores)
         usuario = self.cursor.fetchone()
-
+    
         if usuario:
             self.usuario_logado = True
             self.usuarios = {'cpf': usuario[2]}
             self.saldo = usuario[4]
+            self.chespecial = usuario[5]  # Atualiza o valor do cheque especial
             messagebox.showinfo("Login", "Login realizado com sucesso!")
             return True
         else:
             messagebox.showerror("Erro", "CPF ou senha incorretos.")
             return False
-   
+    
 
     def cadastrar_usuario(self, nome, cpf, senha, saldo):
         try:
             query = "INSERT INTO usuarios (nome, cpf, senha, Saldo, ChequeEspecial ) VALUES (%s, %s, %s, %s, %s)"
-            valores = (nome, cpf, senha, saldo, saldo*4)
+            valores = (nome, cpf, senha, saldo, saldo * 4)
             self.cursor.execute(query, valores)
             self.conexao.commit()
             messagebox.showinfo("Cadastro", "Usuário cadastrado com sucesso!")
@@ -69,7 +70,6 @@ class Banco:
             messagebox.showerror("Erro", f"Erro ao cadastrar usuário: {err}")
 
     def depositar(self, valor):
-        
         if self.usuario_logado:
             if valor > 0:
                 self.saldo += valor
@@ -86,71 +86,68 @@ class Banco:
                 messagebox.showerror("Erro", "Valor inválido.")
         else:
             messagebox.showerror("Erro", "Efetue o login para realizar o depósito.")
-            
-    def extrato(self):
-        query = "SELECT Saldo FROM usuarios WHERE cpf = %s"
-        valores = (self.usuarios.get('cpf'),)
-        
-        try:
+
+    def exibir_extrato(self):
+      
+        if self.usuario_logado:
+            query = "SELECT Saldo, ChequeEspecial FROM usuarios WHERE cpf = %s"
+            valores = (self.usuarios.get('cpf'),)
             self.cursor.execute(query, valores)
-            saldo = self.cursor.fetchone()[0]
+            saldo, cheque_especial = self.cursor.fetchone()
+    
             extrato = f"Saldo atual: R$ {saldo:.2f}\n"
             if saldo < 0:
-                # Se o saldo for negativo, significa que houve uso do cheque especial
                 extrato += f"Uso do Cheque Especial: R$ {-saldo:.2f}\n"
+            extrato += f"Cheque Especial: R$ {cheque_especial:.2f}\n"
             
-            # Adiciona o extrato de transações
-            extrato += "Extrato de Transações:\n"
-            extrato += self.extrato  # Adiciona o extrato anterior
-            
-            print("\n================= Extrato ==================")
-            print(extrato)
-            print("============================================")
-        except mysql.connector.Error as err:
-            print(f"Erro ao obter extrato: {err}")
+            if saldo >= 0:
+                extrato += "Extrato de Transações:\n"
+                extrato += self.extrato
+            else:
+                extrato += "Extrato de Transações (Cheque Especial):\n"
+                extrato += self.extrato
+    
+            messagebox.showinfo("Extrato", extrato)
+        else:
+            messagebox.showerror("Erro", "Faça login primeiro para visualizar o extrato.")
+    
 
     def sacar(self, valor):
         if self.usuario_logado:
             excedeu_saques = self.numero_saques >= self.LIMITE_SAQUES
 
-            # Verifica se o número máximo de saques foi excedido
             if excedeu_saques:
-                messagebox.showerror("Erro", f"Operação falhou! Número máximo de saques excedido. Seu limite de saque é: {self.LIMITE_SAQUES}")
+                messagebox.showerror("Erro", f"Número máximo de saques excedido. Seu limite de saque é: {self.LIMITE_SAQUES}")
             else:
-                saldo_disponivel = self.saldo + self.limite  # Saldo disponível incluindo o cheque especial
+                saldo_disponivel = self.saldo + self.chespecial
 
-                # Verifica se o valor do saque excede o saldo disponível
                 if valor > saldo_disponivel:
-                    messagebox.showerror("Erro", f"Operação falhou! O valor do saque excede o saldo disponível.")
+                    messagebox.showerror("Erro", "Valor do saque excede o saldo disponível.")
                 else:
-                    # Verifica se o saque pode ser realizado apenas com o saldo
                     if valor <= self.saldo:
                         self.saldo -= valor
                         self.extrato += f"Saque: R$ {valor:.2f}\n"
                     else:
-                        # Calcula o valor utilizando o cheque especial
-                        valor_cheque_especial = valor - self.saldo
+                        valor_utilizado_saldo = self.saldo
+                        valor_utilizado_chespecial = valor - self.saldo
                         self.saldo = 0
-                        self.extrato += f"Saque (Cheque Especial): R$ {valor_cheque_especial:.2f}\n"
+                        self.chespecial -= valor_utilizado_chespecial
+                        self.extrato += f"Saque: R$ {valor_utilizado_saldo:.2f} (Saldo) e R$ {valor_utilizado_chespecial:.2f} (Cheque Especial)\n"
 
-                        # Atualiza o valor do cheque especial no banco de dados
-                        query_cheque_especial = "UPDATE usuarios SET ChequeEspecial = ChequeEspecial - %s WHERE cpf = %s"
-                        valores_cheque_especial = (valor_cheque_especial, self.usuarios.get('cpf'))
-                        self.cursor.execute(query_cheque_especial, valores_cheque_especial)
+                        query_atualizar = "UPDATE usuarios SET Saldo = 0, ChequeEspecial = %s WHERE cpf = %s"
+                        valores_atualizar = (self.chespecial, self.usuarios.get('cpf'))
+                        self.cursor.execute(query_atualizar, valores_atualizar)
 
-                    # Atualiza o saldo no banco de dados
                     query_saldo = "UPDATE usuarios SET Saldo = %s WHERE cpf = %s"
                     valores_saldo = (self.saldo, self.usuarios.get('cpf'))
                     self.cursor.execute(query_saldo, valores_saldo)
                     self.conexao.commit()
 
-                    # Incrementa o número de saques realizados
                     self.numero_saques += 1
                     messagebox.showinfo("Saque", "Saque realizado com sucesso!")
         else:
-            messagebox.showerror("Erro", "Efetue o login para realizar um saque.")
-
-
+            messagebox.showerror("Erro", "Faça login primeiro para realizar um saque.")
+    
     def sair(self):
         messagebox.showinfo("Sair", "Saindo do sistema.")
         self.conexao.close()
@@ -158,24 +155,20 @@ class Banco:
     def transferir(self, destino, valor):
         if self.usuario_logado:
             if valor > 0:
-                excedeu_limite = valor > self.limite  # Verifica se o valor excede o limite de transferência
+                excedeu_limite = valor > self.limite
 
-                # Verifica se o valor pode ser transferido apenas com o saldo
                 if valor <= self.saldo:
                     self.saldo -= valor
                     self.extrato += f"Transferência: R$ {valor:.2f} para CPF: {destino}\n"
                 else:
-                    # Calcula o valor utilizando o cheque especial
                     valor_cheque_especial = valor - self.saldo
                     self.saldo = 0
                     self.extrato += f"Transferência (Cheque Especial): R$ {valor_cheque_especial:.2f} para CPF: {destino}\n"
 
-                    # Atualiza o saldo do remetente para 0
                     query_remetente = "UPDATE usuarios SET Saldo = 0, ChequeEspecial = ChequeEspecial - %s WHERE cpf = %s"
                     valores_remetente = (valor_cheque_especial, self.usuarios.get('cpf'))
                     self.cursor.execute(query_remetente, valores_remetente)
 
-                # Atualiza o saldo do destinatário
                 query_destinatario = "UPDATE usuarios SET Saldo = Saldo + %s WHERE cpf = %s"
                 valores_destinatario = (valor, destino)
                 self.cursor.execute(query_destinatario, valores_destinatario)
@@ -190,8 +183,6 @@ class Banco:
 
 
 
-
-
 class Interface:
     def __init__(self, root, banco):
         self.banco = banco
@@ -202,13 +193,11 @@ class Interface:
         style = ttk.Style()
         style.configure("TButton", foreground="black", background="lightgray", font=("times new roman", 25, "bold"), borderwidth=2, relief="raised", padding=10)
 
-        # Adicionando imagens
         logo = PhotoImage(file="Black Piggy Bank Finance Logo.png")
         logo_label = Label(root, image=logo)
         logo_label.image = logo
         logo_label.pack()
 
-        # Adicionando botões
         button_logar = ttk.Button(root, text="Logar", style="TButton", command=self.logar)
         button_logar.pack(side="left", padx=5, pady=5)
 
@@ -230,7 +219,6 @@ class Interface:
         button_sair = ttk.Button(root, text="Sair", style="TButton", command=self.sair)
         button_sair.pack(side="left", padx=5, pady=5)
 
-        
     def logar(self):
         top = tk.Toplevel()
         top.title("Logar")
@@ -294,12 +282,11 @@ class Interface:
 
         tk.Button(top, text="Cadastrar", command=cadastrar_usuario).pack()
 
-    
     def depositar(self):
         top = tk.Toplevel()
         top.title("Depositar")
 
-        tk.Label(top, text="Valor do depósito:").pack()    
+        tk.Label(top, text="Valor do depósito:").pack()
         valor_entry = tk.Entry(top)
         valor_entry.pack()
 
@@ -330,42 +317,12 @@ class Interface:
             else:
                 messagebox.showinfo("Erro", "Faça login primeiro para realizar um saque.")
         tk.Button(top, text="Sacar", command=sacar).pack()
-        
 
     def exibir_extrato(self):
-        top = tk.Toplevel()
-        top.title("Extrato")
-
-        if self.banco.usuario_logado:
-            query = "SELECT Saldo FROM usuarios WHERE cpf = %s"
-            valores = (self.banco.usuarios.get('cpf'),)
-            self.banco.cursor.execute(query, valores)
-            saldo = self.banco.cursor.fetchone()[0]
-
-            # Exibição do saldo
-            saldo_label = tk.Label(top, text=f"Saldo atual: R$ {saldo:.2f}")
-            saldo_label.pack()
-
-            # Exibição do extrato
-            extrato_label = tk.Label(top, text="Extrato:")
-            extrato_label.pack()
-
-            extrato_text = tk.Text(top, height=10, width=50)
-            extrato_text.pack()
-
-            # Adiciona o extrato ao widget de texto
-            extrato_text.insert(tk.END, self.banco.extrato)
-
-            extrato_text.config(state=tk.DISABLED)  # Torna o widget somente leitura
-        else:
-            messagebox.showinfo("Erro", "Faça login primeiro para visualizar o extrato.")
-
+        self.banco.exibir_extrato()
 
     def sair(self):
         self.root.destroy()
-
-    def exibir_interface_inicial(self):
-        self.root.deiconify()
 
     def transferir(self):
         top = tk.Toplevel()
@@ -391,9 +348,7 @@ class Interface:
 
         tk.Button(top, text="Transferir", command=transferir).pack()
 
-
 # Criar a janela principal
 root = tk.Tk()
 interface = Interface(root, Banco())
 root.mainloop()
-
