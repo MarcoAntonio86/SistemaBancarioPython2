@@ -13,6 +13,7 @@ class Banco:
         self.cursor = self.conexao.cursor()
 
         self.usuarios = {}
+        self.saldoI = 0
         self.saldo = 0
         self.limite = 500
         self.chespecial = 0  # limite cheque especial
@@ -30,6 +31,7 @@ class Banco:
                 nome VARCHAR(50) NOT NULL,
                 cpf VARCHAR(11) UNIQUE NOT NULL,
                 senha VARCHAR(50) NOT NULL,
+                SaldoI DOUBLE,                
                 Saldo DOUBLE,
                 ChequeEspecial DOUBLE
             )
@@ -59,10 +61,10 @@ class Banco:
             return False
     
 
-    def cadastrar_usuario(self, nome, cpf, senha, saldo):
+    def cadastrar_usuario(self, nome, cpf, senha, saldoI):
         try:
-            query = "INSERT INTO usuarios (nome, cpf, senha, Saldo, ChequeEspecial ) VALUES (%s, %s, %s, %s, %s)"
-            valores = (nome, cpf, senha, saldo, saldo * 4)
+            query = "INSERT INTO usuarios (nome, cpf, senha, saldoI, saldo, ChequeEspecial ) VALUES (%s, %s, %s, %s, %s, %s)"
+            valores = (nome, cpf, senha, saldoI, saldoI, saldoI*4)
             self.cursor.execute(query, valores)
             self.conexao.commit()
             messagebox.showinfo("Cadastro", "Usuário cadastrado com sucesso!")
@@ -88,28 +90,29 @@ class Banco:
             messagebox.showerror("Erro", "Efetue o login para realizar o depósito.")
 
     def exibir_extrato(self):
-      
         if self.usuario_logado:
             query = "SELECT Saldo, ChequeEspecial FROM usuarios WHERE cpf = %s"
             valores = (self.usuarios.get('cpf'),)
             self.cursor.execute(query, valores)
             saldo, cheque_especial = self.cursor.fetchone()
-    
+
             extrato = f"Saldo atual: R$ {saldo:.2f}\n"
-            if saldo < 0:
+
+            if saldo == 0:
                 extrato += f"Uso do Cheque Especial: R$ {-saldo:.2f}\n"
-            extrato += f"Cheque Especial: R$ {cheque_especial:.2f}\n"
-            
-            if saldo >= 0:
+                extrato += f"Cheque Especial: R$ {cheque_especial:.2f}\n"
+
+            elif saldo > 0:
                 extrato += "Extrato de Transações:\n"
                 extrato += self.extrato
             else:
                 extrato += "Extrato de Transações (Cheque Especial):\n"
                 extrato += self.extrato
-    
+
             messagebox.showinfo("Extrato", extrato)
         else:
             messagebox.showerror("Erro", "Faça login primeiro para visualizar o extrato.")
+
     
 
     def sacar(self, valor):
