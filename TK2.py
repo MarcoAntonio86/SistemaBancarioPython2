@@ -14,7 +14,7 @@ class Banco:
 
         self.usuarios = {}
         self.saldo = 0
-        self.limite = ""
+        self.limite = 500
         self.chespecial = 0  # limite cheque especial
         self.extrato = ""
         self.numero_saques = 0
@@ -159,6 +159,10 @@ class Banco:
 
                 if valor <= self.saldo:
                     self.saldo -= valor
+                    query_remetente = "UPDATE usuarios SET Saldo = %s WHERE cpf = %s"
+                    valores_remetente = (self.saldo, self.usuarios.get('cpf'))
+                    self.cursor.execute(query_remetente, valores_remetente)
+
                     self.extrato += f"Transferência: R$ {valor:.2f} para CPF: {destino}\n"
                 else:
                     valor_cheque_especial = valor - self.saldo
