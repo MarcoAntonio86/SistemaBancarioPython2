@@ -91,13 +91,15 @@ class Banco:
             
     def extrato(self):
 
-        query = "SELECT Saldo FROM usuarios WHERE cpf = %s"
+        query = "SELECT Saldo, ChequeEspecial FROM usuarios WHERE cpf = %s"
         valores = (self.usuarios.get('cpf'),)
         
         try:
             self.cursor.execute(query, valores)
             saldo = self.cursor.fetchone()[0]
+            cheque = self.cheque.fetchone()[0]
             extrato = f"Saldo atual: R$ {saldo:.2f}\n"
+            extrato = f"Saldo Cheque Especial: R$ {cheque:.2f}\n"
             extrato += self.extrato  # Adiciona o extrato anterior
             print("\n================= Extrato ==================")
             print(extrato)
