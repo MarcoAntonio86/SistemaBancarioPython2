@@ -109,53 +109,34 @@ class Banco:
 
     def sacar(self, valor):
         if self.usuario_logado:
-            excedeu_saldo = valor > self.saldo
-            excedeu_limite = valor > self.limite
-            excedeu_cheque = valor > self.cheque
-            excedeu_saques = self.numero_saques >= self.LIMITE_SAQUES
-
-            # Verifica se o saque excede o limite ou o número máximo de saques
-            if excedeu_saldo:
-                if self.saldo == 0:
-                    if excedeu_cheque:
-                        messagebox.showerror("Erro", f"Operação falhou! O valor do saque excedeu o saldo. Seu saldo é: {self.cheque}")
-                    else:
-                        self.cheque -= valor
-                        self.saldo -= valor
-                        self.extrato += f"Saque: R$ {valor:.2f}\n"
-                        self.numero_saques += 1
-
-                        query = "UPDATE usuarios SET Saldo = %s, ChequeEspecial = %s WHERE cpf = %s"
-                        valores = (self.saldo, self.cheque, self.usuarios.get('cpf'))
-                        try:
-                            self.cursor.execute(query, valores)
-                            self.conexao.commit()
-                            messagebox.showinfo("Saque","Saque realizado com sucesso!")
-                        except mysql.connector.Error as err:
-                            print(f"Erro ao atualizar saldo do usuário: {err}")
+            if valor > 0:
+                saldo_disponivel = self.saldo + self.cheque  # Verifica o saldo total disponível (saldo + cheque especial)
+                if valor > saldo_disponivel:
+                    messagebox.showerror("Erro", "Valor de saque excede o saldo e o limite do cheque especial.")
                 else:
-                    messagebox.showerror("Erro", f"Operação falhou! O valor do saque excedeu o saldo. Seu saldo é: {self.saldo}")
-            elif excedeu_limite:
-                messagebox.showerror("Erro", f"Operação falhou! O valor do saque excedeu o limite. Seu limite é: {self.limite}")
-            elif excedeu_saques:
-                messagebox.showerror("Erro", f"Operação falhou! Número máximo de transações excedido. Seu limite de saque é: {self.LIMITE_SAQUES}")          
-            else:
-                # Atualiza o saldo e o extrato
-                self.saldo -= valor
-                self.extrato += f"Saque: R$ {valor:.2f}\n"
-                self.numero_saques += 1
+                    if valor > self.saldo:
+                        # Calcula o valor restante para sacar do cheque especial
+                        valor_restante = valor - self.saldo
+                        self.saldo = 0
+                        self.cheque -= valor_restante  # Atualiza o saldo do cheque especial
+                        self.saldo -= valor_restante  # "Choque" do valor do cheque especial para o saldo
+                    else:
+                        self.saldo -= valor
+                    self.extrato += f"Saque: R$ {valor:.2f}\n"
+                    self.numero_saques += 1
 
-                query = "UPDATE usuarios SET Saldo = %s WHERE cpf = %s"
-                valores = (self.saldo, self.usuarios.get('cpf'))
-                try:
-                    self.cursor.execute(query, valores)
-                    self.conexao.commit()
-                    messagebox.showinfo("Saque","Saque realizado com sucesso!")
-                except mysql.connector.Error as err:
-                    print(f"Erro ao atualizar saldo do usuário: {err}")
+                    query = "UPDATE usuarios SET Saldo = %s, ChequeEspecial = %s WHERE cpf = %s"
+                    valores = (self.saldo, self.cheque, self.usuarios.get('cpf'))
+                    try:
+                        self.cursor.execute(query, valores)
+                        self.conexao.commit()
+                        messagebox.showinfo("Saque", "Saque realizado com sucesso!")
+                    except mysql.connector.Error as err:
+                        print(f"Erro ao atualizar saldo do usuário: {err}")
+            else:
+                messagebox.showerror("Erro", "Valor de saque inválido.")
         else:
             messagebox.showerror("Erro", "Efetue o login para realizar o saque.")
-
 
     def sair(self):
         messagebox.showinfo("Sair", "Saindo do sistema.")
@@ -163,53 +144,33 @@ class Banco:
 
     def transferir(self, destino, valor):
         if self.usuario_logado:
-            excedeu_saldo = valor > self.saldo
-            excedeu_limite = valor > self.limite
-            excedeu_cheque = valor > self.cheque
-            excedeu_saques = self.numero_saques >= self.LIMITE_SAQUES
-
-            # Verifica se o saque excede o limite ou o número máximo de saques
-            if excedeu_saldo:
-                if self.saldo == 0:
-                    if excedeu_cheque:
-                        messagebox.showerror("Erro", f"Operação falhou! O valor do saque excedeu o saldo. Seu saldo é: {self.cheque}")
-                    else:
-                        self.cheque -= valor
-                        self.saldo -= valor
-                        self.extrato += f"Transferência: R$ {valor:.2f} para CPF: {destino}\n"
-                        self.numero_saques += 1
-
-                        query = "UPDATE usuarios SET Saldo = %s, ChequeEspecial = %s WHERE cpf = %s"
-                        valores = (self.saldo, self.cheque, self.usuarios.get('cpf'))
-                        try:
-                            self.cursor.execute(query, valores)
-                            self.conexao.commit()
-                            messagebox.showinfo("Transferência", f"Transferência de R$ {valor:.2f} realizada com sucesso para o CPF: {destino}.")
-                        except mysql.connector.Error as err:
-                            print(f"Erro ao atualizar saldo do usuário: {err}")
+            if valor > 0:
+                saldo_disponivel = self.saldo + self.cheque  # Verifica o saldo total disponível (saldo + cheque especial)
+                if valor > saldo_disponivel:
+                    messagebox.showerror("Erro", "Valor da transferência excede o saldo e o limite do cheque especial.")
                 else:
-                    messagebox.showerror("Erro", f"Operação falhou! O valor da transferência excedeu o saldo. Seu saldo é: {self.saldo}")
-            elif excedeu_limite:
-                messagebox.showerror("Erro", f"Operação falhou! O valor da transferência excedeu o limite. Seu limite é: {self.limite}")
-            elif excedeu_saques:
-                messagebox.showerror("Erro", f"Operação falhou! Número máximo de transações excedido. Seu limite de transações é: {self.LIMITE_SAQUES}")          
+                    if valor > self.saldo:
+                        # Calcula o valor restante para transferir do cheque especial
+                        valor_restante = valor - self.saldo
+                        self.saldo = 0
+                        self.cheque -= valor_restante  # Atualiza o saldo do cheque especial
+                        self.saldo -= valor_restante  # "Choque" do valor do cheque especial para o saldo
+                    else:
+                        self.saldo -= valor
+                    self.extrato += f"Transferência: R$ {valor:.2f} para CPF: {destino}\n"
+
+                    query = "UPDATE usuarios SET Saldo = %s, ChequeEspecial = %s WHERE cpf = %s"
+                    valores = (self.saldo, self.cheque, self.usuarios.get('cpf'))
+                    try:
+                        self.cursor.execute(query, valores)
+                        self.conexao.commit()
+                        messagebox.showinfo("Transferência", f"Transferência de R$ {valor:.2f} realizada com sucesso para o CPF: {destino}.")
+                    except mysql.connector.Error as err:
+                        print(f"Erro ao atualizar saldo do usuário: {err}")
             else:
-                # Atualiza o saldo e o extrato
-                self.saldo -= valor
-                self.extrato += f"Transferência: R$ {valor:.2f} para CPF: {destino}\n"
-                self.numero_saques += 1
-
-                query = "UPDATE usuarios SET Saldo = %s WHERE cpf = %s"
-                valores = (self.saldo, self.usuarios.get('cpf'))
-                try:
-                    self.cursor.execute(query, valores)
-                    self.conexao.commit()
-                    messagebox.showinfo("Transferência", f"Transferência de R$ {valor:.2f} realizada com sucesso para o CPF: {destino}.")
-                except mysql.connector.Error as err:
-                    print(f"Erro ao atualizar saldo do usuário: {err}")
+                messagebox.showerror("Erro", "Valor de transferência inválido.")
         else:
-            messagebox.showerror("Erro", "Efetue o login para realizar o saque.")
-
+            messagebox.showerror("Erro", "Efetue o login para realizar a transferência.")
 
 
 
